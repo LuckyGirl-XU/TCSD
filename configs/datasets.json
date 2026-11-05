@@ -1,0 +1,300 @@
+{
+  "common": {
+    "batch_size": 256,
+    "multi_negs_batch_size": 20,
+    "model_name": "TCSD",
+    "gpu": 0,
+    "output_dim": 172,
+    "embedding_size": 172,
+    "num_train_negs": 1,
+    "save_model_path": "./saved_models/",
+    "dataset_path": "./data/",
+    "sample_neighbor_strategy": "recent",
+    "time_scaling_factor": 1e-06,
+    "num_heads": 2,
+    "time_gap": 20000,
+    "learning_rate": 0.0003,
+    "dropout": 0.1,
+    "scale": 12,
+    "optimizer": "Adam",
+    "weight_decay": 0,
+    "num_runs": 1,
+    "seed": 0,
+    "is_bipartite": false,
+    "load_pretrained": false,
+    "use_node_feat": false,
+    "num_layers": 2,
+    "merge": "cat",
+    "hidden_act": "gelu",
+    "loss": "BCE",
+    "layer_norm_eps": 1e-12,
+    "initializer_range": 0.02,
+    "use_pos": true,
+    "output_cat_time_intervals": false,
+    "output_cat_repeat_times": false,
+    "input_cat_time_intervals": false,
+    "emb_dropout_prob": 0.1,
+    "skip_connection": false,
+    "run_name": "",
+    "momentum": 0.1,
+    "latent_dim": 32,
+    "kl_weight": 0.01,
+    "num_latent_modes": 4,
+    "use_structural_invariance": false,
+    "si_weight": 0.1
+  },
+  "datasets": {
+    "uci": {
+      "dataset_name": "uci",
+      "data_format": "csv",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "uci",
+        "num_neighbors": 30,
+        "use_lr_scheduler": false,
+        "num_epochs": 50,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.1,
+        "attn_dropout_prob": 0.1,
+        "num_output_layer": 2,
+        "collision_check": true,
+        "use_mrr_val": true
+      }
+    },
+    "mooc": {
+      "dataset_name": "mooc",
+      "data_format": "csv",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "mooc",
+        "num_neighbors": 20,
+        "use_lr_scheduler": true,
+        "num_epochs": 30,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.1,
+        "attn_dropout_prob": 0.1,
+        "num_output_layer": 1,
+        "collision_check": true,
+        "use_mrr_val": true
+      }
+    },
+    "lastfm": {
+      "dataset_name": "lastfm",
+      "data_format": "csv",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "lastfm",
+        "num_neighbors": 80,
+        "use_lr_scheduler": true,
+        "num_epochs": 30,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.1,
+        "attn_dropout_prob": 0.1,
+        "num_output_layer": 1,
+        "collision_check": true,
+        "use_mrr_val": true
+      }
+    },
+    "GoogleLocal": {
+      "dataset_name": "GoogleLocal",
+      "data_format": "tgb-seq",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "GoogleLocal",
+        "num_neighbors": 20,
+        "use_lr_scheduler": true,
+        "num_epochs": 30,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.5,
+        "attn_dropout_prob": 0.5,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    },
+    "wikipedia": {
+      "dataset_name": "wikipedia",
+      "data_format": "csv",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "wikipedia",
+        "num_neighbors": 30,
+        "use_lr_scheduler": false,
+        "num_epochs": 50,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.1,
+        "attn_dropout_prob": 0.1,
+        "num_output_layer": 2,
+        "collision_check": true,
+        "use_mrr_val": true
+      }
+    },
+    "YouTube": {
+      "dataset_name": "YouTube",
+      "data_format": "tgb-seq",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "YouTube",
+        "num_neighbors": 20,
+        "use_lr_scheduler": true,
+        "num_epochs": 100,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.5,
+        "attn_dropout_prob": 0.5,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    },
+    "Flickr": {
+      "dataset_name": "Flickr",
+      "data_format": "tgb-seq",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "Flickr",
+        "num_neighbors": 30,
+        "use_lr_scheduler": true,
+        "num_epochs": 20,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.5,
+        "attn_dropout_prob": 0.5,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    },
+    "Flights": {
+      "dataset_name": "Flights",
+      "data_format": "csv",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "Flights",
+        "num_neighbors": 50,
+        "use_lr_scheduler": true,
+        "num_epochs": 20,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.5,
+        "attn_dropout_prob": 0.5,
+        "num_output_layer": 2,
+        "collision_check": true,
+        "use_mrr_val": true
+      }
+    },
+    "tgbl-review": {
+      "dataset_name": "tgbl-review",
+      "data_format": "csv",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "tgbl-review",
+        "num_neighbors": 20,
+        "use_lr_scheduler": true,
+        "num_epochs": 35,
+        "patience": 20,
+        "use_edge_feat": true,
+        "hidden_dropout": 0.5,
+        "attn_dropout_prob": 0.5,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    },
+    "Taobao": {
+      "dataset_name": "Taobao",
+      "data_format": "tgb-seq",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "Taobao",
+        "num_neighbors": 30,
+        "use_lr_scheduler": false,
+        "num_epochs": 15,
+        "patience": 15,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.1,
+        "attn_dropout_prob": 0.1,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    },
+    "WikiLink": {
+      "dataset_name": "WikiLink",
+      "data_format": "tgb-seq",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "WikiLink",
+        "num_neighbors": 30,
+        "use_lr_scheduler": true,
+        "num_epochs": 15,
+        "patience": 15,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.5,
+        "attn_dropout_prob": 0.5,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    },
+    "tgbl-coin": {
+      "dataset_name": "tgbl-coin",
+      "data_format": "tgb",
+      "test_negatives": 20,
+      "config": {
+        "dataset_name": "tgbl-coin",
+        "num_neighbors": 30,
+        "use_lr_scheduler": false,
+        "num_epochs": 15,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.1,
+        "attn_dropout_prob": 0.1,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    },
+    "tgbl-comment": {
+      "dataset_name": "tgbl-comment",
+      "data_format": "tgb",
+      "test_negatives": 20,
+      "config": {
+        "dataset_name": "tgbl-comment",
+        "num_neighbors": 30,
+        "use_lr_scheduler": true,
+        "num_epochs": 15,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.5,
+        "attn_dropout_prob": 0.5,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    },
+    "tgbl-flight": {
+      "dataset_name": "tgbl_flight",
+      "data_format": "csv",
+      "test_negatives": 100,
+      "config": {
+        "dataset_name": "tgbl_flight",
+        "num_neighbors": 20,
+        "use_lr_scheduler": true,
+        "num_epochs": 100,
+        "patience": 20,
+        "use_edge_feat": false,
+        "hidden_dropout": 0.5,
+        "attn_dropout_prob": 0.5,
+        "num_output_layer": 2,
+        "collision_check": false,
+        "use_mrr_val": true
+      }
+    }
+  }
+}
