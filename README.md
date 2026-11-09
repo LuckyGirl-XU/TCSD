@@ -1,12 +1,4 @@
-<p align="center">
-  <img src="assets/overview.png" alt="TCSD: evolving structural states guide aggregation" width="460">
-</p>
-
 <h1 align="center">A New Perspective on Target-Conditioned Structural Dynamics<br>for Link Prediction in Dynamic Graphs</h1>
-
-<p align="center">
-  Yuanyuan Xu, Yin Chen, Yingxuan Li, Wenjie Zhang, Xuemin Lin, Ying Zhang
-</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/NeurIPS-2026-4b44ce" alt="NeurIPS 2026">
@@ -24,7 +16,7 @@
   <a href="#citation">Citation</a>
 </p>
 
-This repository is the official implementation of **TCSD**. It is built on the [CRAFT](https://github.com/luyi256/CRAFT) codebase, so the baselines stay available next to TCSD and all methods share the same data splits, negative sampling and metrics.
+This repository is the official implementation of **TCSD**. The baselines stay available next to TCSD and all methods share the same data splits, negative sampling and metrics.
 
 ## Overview
 
@@ -49,29 +41,7 @@ TCSD treats structural signals as **states that evolve over the recent history**
 - **Best on 13 of 16 datasets** against ten baselines
 - **Up to +14.27%** relative MRR improvement, on YouTube
 - **4.43× faster per epoch** than DyGFormer on mooc, and 3.76× on lastfm
-
-Test MRR (%), mean ± std over 3 runs, reported in the paper. **Bold** marks the best result of the row.
-
-| Dataset | Setting | TCSD | Best baseline | Relative gain |
-|---|---|---|---|---|
-| ML-20M | Unseen-dominant | 35.10 ± 0.58 | **35.91 ± 0.65** (CRAFT) | -2.26% |
-| Taobao | Unseen-dominant | **73.34 ± 0.46** | 70.68 ± 0.42 (CRAFT) | +3.76% |
-| GoogleLocal | Unseen-dominant | **66.24 ± 0.55** | 62.35 ± 0.46 (CRAFT) | +6.24% |
-| Flickr | Unseen-dominant | **69.99 ± 0.00** | 62.34 ± 0.84 (CRAFT) | +12.27% |
-| YouTube | Unseen-dominant | **67.33 ± 0.35** | 58.92 ± 0.16 (CRAFT) | +14.27% |
-| WikiLink | Unseen-dominant | **79.23 ± 0.14** | 75.48 ± 0.84 (CRAFT) | +4.97% |
-| tgbl-review | Unseen-dominant | **46.09 ± 0.39** | 44.64 ± 0.19 (TAMI-GM) | +3.25% |
-| tgbl-comment | Unseen-dominant | **92.73 ± 0.09** | 91.72 ± 0.59 (CRAFT) | +1.10% |
-| wikipedia | Seen-dominant | **89.51 ± 0.02** | 88.69 ± 0.04 (DyGFormer) | +0.92% |
-| reddit | Seen-dominant | **89.42 ± 0.14** | 89.33 ± 0.11 (CRAFT) | +0.10% |
-| mooc | Seen-dominant | **69.78 ± 0.38** | 62.32 ± 0.39 (CRAFT) | +11.97% |
-| lastfm | Seen-dominant | **55.88 ± 0.45** | 55.21 ± 0.23 (CRAFT) | +1.21% |
-| uci | Seen-dominant | **79.50 ± 0.19** | 76.61 ± 0.26 (DyGFormer) | +3.77% |
-| Flights | Seen-dominant | 83.14 ± 0.51 | **85.30 ± 0.51** (TAMI-DyG) | -2.53% |
-| tgbl-coin | Seen-dominant | **91.12 ± 0.22** | 88.47 ± 0.25 (CRAFT) | +3.00% |
-| tgbl-flights | Seen-dominant | 87.58 ± 0.37 | **91.39 ± 0.03** (CRAFT) | -4.17% |
-
-Evaluation follows the ranking-based setting: each positive query is ranked against 100 sampled negative destinations. `tgbl-coin` and `tgbl-comment` use the 20 negatives stored in their test files.
+- 
 
 ## Getting started
 
@@ -124,26 +94,6 @@ Without this flag, only the defaults of [`utils/load_configs.py`](utils/load_con
 python train_link_prediction.py --dataset_name uci --load_best_configs --print_config
 ```
 
-All presets use a batch size of 256, a learning rate of 3e-4, a hidden dimension of 172, 2 encoder layers and BCE. The settings that differ per dataset are:
-
-| Dataset | Neighbors | Hidden dropout | Predictor layers | Epochs | LR scheduler | Edge features |
-|---|---:|---:|---:|---:|:---:|:---:|
-| uci | 30 | 0.1 | 2 | 50 |  |  |
-| mooc | 20 | 0.1 | 1 | 30 | ✓ |  |
-| lastfm | 80 | 0.1 | 1 | 30 | ✓ |  |
-| wikipedia | 30 | 0.1 | 2 | 50 |  |  |
-| Flights | 50 | 0.5 | 2 | 20 | ✓ |  |
-| GoogleLocal | 20 | 0.5 | 2 | 30 | ✓ |  |
-| Taobao | 30 | 0.1 | 2 | 15 |  |  |
-| Flickr | 30 | 0.5 | 2 | 20 | ✓ |  |
-| YouTube | 20 | 0.5 | 2 | 100 | ✓ |  |
-| WikiLink | 30 | 0.5 | 2 | 15 | ✓ |  |
-| tgbl-review | 20 | 0.5 | 2 | 35 | ✓ | ✓ |
-| tgbl-coin | 30 | 0.1 | 2 | 15 |  |  |
-| tgbl-comment | 30 | 0.5 | 2 | 15 | ✓ |  |
-| tgbl-flight | 20 | 0.5 | 2 | 100 | ✓ |  |
-
-`reddit` and `ML-20M` have no preset and use the [default configuration](#using-your-own-dataset).
 
 ### Multiple seeds
 
