@@ -20,8 +20,6 @@ This repository is the official implementation of **TCSD**. The baselines stay a
 
 ## Overview
 
-Whether a link will form depends on the candidate target: the same source history can be strong evidence for one target and irrelevant for another. Existing target-conditioned methods capture this with repeated interactions or co-neighbor overlap, but they usually encode these signals as identity-based features and inject them passively before aggregation. These encodings collapse when exact matches are sparse, and the signals get diluted among high-dimensional time and edge features.
-
 TCSD treats structural signals as **states that evolve over the recent history**, and lets their dynamics control the aggregation.
 
 <p align="center">
@@ -76,7 +74,7 @@ The test negatives of the TGB-Seq and TGB datasets come with the datasets. For t
 python train_link_prediction.py --dataset_name uci --load_best_configs --gpu 0 --seed 0
 ```
 
-This trains TCSD on uci, selects the best checkpoint by validation MRR and evaluates it on the test set. It takes about 12 minutes on a Tesla V100.
+This trains TCSD on uci and evaluates it on the test set. 
 
 ## Training and evaluation
 
