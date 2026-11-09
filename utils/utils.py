@@ -1,23 +1,11 @@
+import math
 import random
-
-
 import torch
-
-
 import torch.nn as nn
-
-
 import numpy as np
-
-
 import pandas as pd
-
-
-import os
-
-
 from utils.DataLoader import Data
-
+from tgb_seq.datasets.datasets_info import DATA_VERSION
 
 TIME_ENCODING_DICT = { # time_base, max_slot_length
     'wikipedia': [10, 300000],
@@ -49,7 +37,6 @@ TIME_ENCODING_DICT = { # time_base, max_slot_length
     'Taobao': [10, 300000],
 }
 
-
 TIME_SLOT_DICT = { # time_base,slot_len
     'wikipedia': [1000, 3000],
     'mooc': [10, 300000],
@@ -79,7 +66,6 @@ TIME_SLOT_DICT = { # time_base,slot_len
     'ML-20M': [10, 300000],
     'Taobao': [10, 300000],
 }
-
 
 def set_random_seed(seed: int = 0):
     """
@@ -113,6 +99,22 @@ def convert_to_gpu(*data, device: str):
     return res
 
 
+def create_lr_scheduler(optimizer: torch.optim.Optimizer, num_epochs: int):
+    """
+    create a scheduler with a linear warmup followed by cosine annealing, per epoch
+    :param optimizer: Optimizer, optimizer
+    :param num_epochs: int, number of training epochs
+    :return:
+    """
+    warmup_epochs = min(5, num_epochs // 5)
+    def lr_lambda(epoch):
+        if epoch < warmup_epochs:
+            return (epoch + 1) / warmup_epochs
+        progress = (epoch - warmup_epochs) / max(1, num_epochs - warmup_epochs)
+        return 0.5 * (1 + math.cos(math.pi * progress))
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+
 def get_parameter_sizes(model: nn.Module):
     """
     get parameter size of trainable parameters in model
@@ -144,6 +146,45 @@ def create_optimizer(model: nn.Module, optimizer_name: str, learning_rate: float
         raise ValueError(f"Wrong value for optimizer {optimizer_name}!")
 
     return optimizer
+
+def write_results(save_model_folder, model_name, version, dataset_path, dataset, mrr_list, pos_rank_list, pos_scores, first_list, y_pred_first_list, last_nei_time_list):
+    if dataset in DATA_VERSION:
+        dataset_v = DATA_VERSION[dataset]
+    else:
+        dataset_v = '0'
+    if dataset_v == '0':
+        df=pd.read_csv(f'{dataset_path}/{dataset}/{dataset}.csv')
+    else:
+        df=pd.read_csv(f'{dataset_path}/{dataset}/{dataset}_v{dataset_v}.csv')
+    df['mrr']=0
+    df['pos_prefix']='*'
+    df['pos_node']=-1
+    df['pos_rank']=-1
+    df['pos_suffix']='**'
+    for i in range(20):
+        df[f'first_{i+1}']=-1
+        df[f'first_{i+1}_score']=-1
+        df[f'first_{i+1}_time']=-1
+        df[f'first_{i+1}_num_nei']=-1
+    if 'split' in df.columns:
+        test_df = df[df['split'] == 2]
+    else:
+        test_df = df[df['ext_roll']==2]
+    last_nei_time_list, neislen_list = last_nei_time_list[0], last_nei_time_list[1]
+    assert len(test_df) == len(mrr_list) == len(pos_rank_list) == len(first_list) == len(y_pred_first_list) == len(last_nei_time_list) == len(neislen_list)
+    test_df['mrr'] = mrr_list
+    test_df['pos_rank'] = np.array(pos_rank_list)[:,1]
+    test_df['pos_node'] = np.array(pos_rank_list)[:,0]
+    test_df['pos_score'] = torch.tensor(pos_scores).cpu().numpy()
+    test_df['src_last_time'] = np.array(last_nei_time_list)[:,0]
+    test_df['dst_last_time'] = np.array(last_nei_time_list)[:,1]
+    for i in range(20):
+        test_df[f'first_{i+1}'] = np.array(first_list)[:,i]
+        test_df[f'first_{i+1}_score'] = np.array(y_pred_first_list)[:,i]
+        test_df[f'first_{i+1}_time'] = np.array(last_nei_time_list)[:,i+2]
+        test_df[f'first_{i+1}_num_nei'] = np.array(neislen_list)[:,i+2]
+    new_df = pd.concat([df[df['split'] != 2], test_df], axis=0)
+    new_df.to_csv(f'{save_model_folder}/{dataset}_{model_name}_v{version}_test_results.csv', index=False)
 
 
 class NeighborSampler(object):
@@ -267,51 +308,6 @@ class NeighborSamplerOrigin(NeighborSampler):
         
         
 
-
-    # ---- vectorised 'recent' sampling (same output as the per-node loop below; built lazily once per sampler) ----
-    def _build_recent_index(self):
-        ids, eids, tts = self.nodes_neighbor_ids, self.nodes_edge_ids, self.nodes_neighbor_times
-        Nn = len(ids)
-        lens = np.fromiter((len(a) for a in ids), dtype=np.int64, count=Nn)
-        seg_ptr = np.zeros(Nn + 1, dtype=np.int64); np.cumsum(lens, out=seg_ptr[1:])
-        total = int(seg_ptr[-1])
-        flat_ids = np.zeros(total, dtype=np.longlong); flat_eids = np.zeros(total, dtype=np.longlong)
-        flat_t = np.zeros(total, dtype=np.float64)
-        if total:
-            flat_ids[:] = np.concatenate([np.asarray(a, dtype=np.longlong) for a in ids])
-            flat_eids[:] = np.concatenate([np.asarray(a, dtype=np.longlong) for a in eids])
-            flat_t[:] = np.concatenate([np.asarray(a, dtype=np.float64) for a in tts])
-        ut = np.unique(flat_t)                                  # exact time ranks -> exact integer keys
-        rank = np.searchsorted(ut, flat_t, side='left')
-        seg_of = np.repeat(np.arange(Nn, dtype=np.int64), lens)
-        self._rec = dict(seg_ptr=seg_ptr, flat_ids=flat_ids, flat_eids=flat_eids, flat_t=flat_t, ut=ut,
-                         key=seg_of * (len(ut) + 1) + rank, U=len(ut) + 1)
-
-    def _recent_fast(self, node_ids, node_interact_times, num_neighbors):
-        if not hasattr(self, '_rec'):
-            self._build_recent_index()
-        R = self._rec; K = num_neighbors
-        B = len(node_ids)
-        out_ids = np.zeros((B, K), dtype=np.longlong); out_eids = np.zeros((B, K), dtype=np.longlong)
-        out_t = np.zeros((B, K), dtype=np.float32)
-        n = min(B, len(node_interact_times))                    # the loop version zips the two arrays (truncates to the shorter)
-        if n == 0:
-            return out_ids, out_eids, out_t
-        node_ids = np.asarray(node_ids[:n], dtype=np.int64); t = np.asarray(node_interact_times[:n], dtype=np.float64)
-        rt = np.searchsorted(R['ut'], t, side='left')          # number of distinct times < t
-        end = np.searchsorted(R['key'], node_ids * R['U'] + rt, side='left')   # = seg_ptr[node] + #(entries with time < t)
-        start = R['seg_ptr'][node_ids]
-        Kw = int(min(K, (end - start).max()))                   # only as many columns as the longest history in the batch
-        if Kw <= 0:
-            return out_ids, out_eids, out_t
-        pos = end[:, None] - Kw + np.arange(Kw)[None, :]
-        valid = pos >= start[:, None]
-        posc = np.where(valid, pos, 0)
-        out_ids[:n, K - Kw:] = np.where(valid, R['flat_ids'][posc], 0)
-        out_eids[:n, K - Kw:] = np.where(valid, R['flat_eids'][posc], 0)
-        out_t[:n, K - Kw:] = np.where(valid, R['flat_t'][posc], 0.0)
-        return out_ids, out_eids, out_t
-
     def get_historical_neighbors(self, node_ids: np.ndarray, node_interact_times: np.ndarray, num_neighbors: int = 20):
         """
         get historical neighbors of nodes in node_ids with interactions before the corresponding time in node_interact_times
@@ -333,8 +329,6 @@ class NeighborSamplerOrigin(NeighborSampler):
         nodes_neighbor_times = np.zeros((len(node_ids), num_neighbors)).astype(np.float32)
         if node_interact_times is None: # None means to get all the neighbors
             node_interact_times=np.ones_like(node_ids)*np.finfo(np.float32).max 
-        if self.sample_neighbor_strategy == 'recent' and num_neighbors <= 64 and not os.environ.get('SLOW_SAMPLER'):   # wide windows (GraphMixer K=2000) stay on the loop
-            return self._recent_fast(node_ids, node_interact_times, num_neighbors)
         # extracts all neighbors ids, edge ids and interaction times of nodes in node_ids, which happened before the corresponding time in node_interact_times
         for idx, (node_id, node_interact_time) in enumerate(zip(node_ids, node_interact_times)):
             # find neighbors that interacted with node_id before time node_interact_time
@@ -434,30 +428,16 @@ class NeighborSamplerOrigin(NeighborSampler):
                     nodes_neighbor_ids[idx, :] = nodes_neighbor_ids[idx, :][sorted_position]
                     nodes_edge_ids[idx, :] = nodes_edge_ids[idx, :][sorted_position]
                     nodes_neighbor_times[idx, :] = nodes_neighbor_times[idx, :][sorted_position]
-#                 elif self.sample_neighbor_strategy == 'recent':
-#                     # Take most recent interactions with number num_neighbors
-#                     node_neighbor_ids = node_neighbor_ids[-num_neighbors:]
-#                     node_edge_ids = node_edge_ids[-num_neighbors:]
-#                     node_neighbor_times = node_neighbor_times[-num_neighbors:]
-
-#                     # put the neighbors' information at the front positions
-#                     nodes_neighbor_ids[idx, :len(node_neighbor_ids)] = node_neighbor_ids
-#                     nodes_edge_ids[idx, :len(node_edge_ids)] = node_edge_ids
-#                     nodes_neighbor_times[idx, :len(node_neighbor_times)] = node_neighbor_times
-                    
-                    
                 elif self.sample_neighbor_strategy == 'recent':
                     # Take most recent interactions with number num_neighbors
                     node_neighbor_ids = node_neighbor_ids[-num_neighbors:]
                     node_edge_ids = node_edge_ids[-num_neighbors:]
                     node_neighbor_times = node_neighbor_times[-num_neighbors:]
 
-                    L = len(node_neighbor_ids)  # <= num_neighbors
-
-                    # left-align: put neighbors at the front, pad on the right
-                    nodes_neighbor_ids[idx, :L] = node_neighbor_ids
-                    nodes_edge_ids[idx, :L] = node_edge_ids
-                    nodes_neighbor_times[idx, :L] = node_neighbor_times
+                    # put the neighbors' information at the front positions
+                    nodes_neighbor_ids[idx, :len(node_neighbor_ids)] = node_neighbor_ids
+                    nodes_edge_ids[idx, :len(node_edge_ids)] = node_edge_ids
+                    nodes_neighbor_times[idx, :len(node_neighbor_times)] = node_neighbor_times
                 else:
                     raise ValueError(f'Not implemented error for sample_neighbor_strategy {self.sample_neighbor_strategy}!')
 
@@ -524,7 +504,6 @@ class NeighborSamplerOrigin(NeighborSampler):
         """
         self.random_state = np.random.RandomState(self.seed)
 
-
 class LastUpdateTime(object):
     def __init__(self, num_nodes: int, chrono: bool = True, neighbor_sampler: NeighborSampler = None):
         self.last_update_time = np.zeros(num_nodes+1, dtype=np.float32)
@@ -553,7 +532,6 @@ class LastUpdateTime(object):
     def recover_state(self):
         self.last_update_time = self.train_val_last_update_time.copy()
 
-
 def get_neighbor_sampler(data: Data, sample_neighbor_strategy: str = 'uniform', time_scaling_factor: float = 0.0, seed: int = None, fix_window_size: int = -1,device: str='cpu', undirected=True):
     """
     get neighbor sampler
@@ -577,7 +555,6 @@ def get_neighbor_sampler(data: Data, sample_neighbor_strategy: str = 'uniform', 
         adj_list[dst_node_id].append((src_node_id, edge_id, node_interact_time))
 
     return NeighborSamplerOrigin(adj_list=adj_list, sample_neighbor_strategy=sample_neighbor_strategy, time_scaling_factor=time_scaling_factor, seed=seed)
-
 
 class NeighborSamplerWindow(NeighborSampler):
     def __init__(self,num_nodes,fix_window_size=20, device: str = 'cpu',undirected=True, time_scaling_factor=0.1):
@@ -646,7 +623,6 @@ class NeighborSamplerWindow(NeighborSampler):
         self.neighbors_arr=self.train_val_neighbors_arr.detach().copy()
         self.edgeids_arr=self.train_val_edgeids_arr.detach().copy()
         self.times_arr=self.train_val_times_arr.detach().copy()
-
 
 class NegativeEdgeSampler(object):
 
@@ -890,5 +866,3 @@ def pad_sequences(nodes_neighbor_ids_list: list, nodes_edge_ids_list: list = Non
 
     # three ndarrays with shape (batch_size, max_seq_length)
     return padded_nodes_neighbor_ids, padded_nodes_edge_ids, padded_nodes_neighbor_times
-
-

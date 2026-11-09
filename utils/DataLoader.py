@@ -1,26 +1,19 @@
 from torch.utils.data import Dataset, DataLoader
 
-
 import numpy as np
-
 
 import pandas as pd
 
-
 from tgb_seq.LinkPred.dataloader import TGBSeqLoader
-
 
 from tgb.linkproppred.dataset import LinkPropPredDataset
 
-
 import os
-
 
 TGB_Seq_DATA_NAME=["ML-20M", "Taobao", "Yelp","GoogleLocal", "Flickr", "YouTube", "Patent", "WikiLink"]
 
-
+# tgbl-review and tgbl-flight are read from their processed CSV files, as the other CSV datasets
 TGB_DATA_NAME = ["tgbl-wiki", "tgbl-flight", "tgbl-comment", "tgbl-coin", "tgbl-enron", "thgl-software", "thgl-forum"]
-
 
 class CustomizedDataset(Dataset):
     def __init__(self, indices_list: list):
@@ -43,8 +36,7 @@ class CustomizedDataset(Dataset):
     def __len__(self):
         return len(self.indices_list)
 
-
-def get_idx_data_loader(indices_list: list, batch_size: int):
+def get_idx_data_loader(indices_list: list, batch_size: int, shuffle: bool = False):
     """
     get data loader that iterates over indices
     :param indices_list: list, list of indices
@@ -55,10 +47,9 @@ def get_idx_data_loader(indices_list: list, batch_size: int):
 
     data_loader = DataLoader(dataset=dataset,
                              batch_size=batch_size,
-                             shuffle=False,
+                             shuffle=shuffle,
                              drop_last=False)
     return data_loader
-
 
 class Data:
 
@@ -93,7 +84,6 @@ class Data:
         else:
             self.neg_samples = None
             self.num_neg_samples = 0
-
 
 def get_link_prediction_data(dataset_name: str, val_ratio: float = 0.15, test_ratio: float = 0.15, dataset_path='./processed_data/', use_edge_feat=False,use_node_feat=False, logger=None):
     """
@@ -155,7 +145,7 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float = 0.15, test_ra
         val_test_mask = data.edgelist['split']!=0
         val_test_data= Data(src_node_ids=src_node_ids[val_test_mask], dst_node_ids=dst_node_ids[val_test_mask],
                         node_interact_times=node_interact_times[val_test_mask], edge_ids=edge_ids[val_test_mask], labels=labels[val_test_mask],neg_samples=test_ns, split=data.edgelist['split'][val_test_mask].values)
-    elif dataset_name in TGB_DATA_NAME or (dataset_name == 'tgbl-review' and os.environ.get('TGB_OFFICIAL_REVIEW') == '1'):
+    elif dataset_name in TGB_DATA_NAME:
         # this part is mostly adopted from DyGLib_TGB
         dataset = LinkPropPredDataset(name=dataset_name, root=dataset_path, preprocess=True)
         data = dataset.full_data
@@ -185,30 +175,7 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float = 0.15, test_ra
         processed_dataset_name = dataset_name.replace('-', '_')
         test_ns_path = os.path.join(dataset_path, processed_dataset_name, f"{processed_dataset_name}_test_ns.npy")
         # ! modifications: we store the negative samples for convenience of evaluation //////////////////////////////////////////////////////////////
-        test_ns_found = None
-        _official_partial = ((dataset_name == 'tgbl-review' and os.environ.get('TGB_OFFICIAL_REVIEW') == '1')
-                             or os.environ.get('TGB_OFFICIAL_DS') == dataset_name)
-        if _official_partial:
-            _off_ns_path = os.path.join(dataset_path, processed_dataset_name, processed_dataset_name + '_official_test_ns_plus1.npy')
-            _off_mask_path = os.path.join(dataset_path, processed_dataset_name, processed_dataset_name + '_official_test_ns_found.npy')
-            if os.path.exists(_off_ns_path) and os.path.exists(_off_mask_path):
-                test_ns = np.load(_off_ns_path)
-                test_ns_found = np.load(_off_mask_path)
-            else:
-                dataset.load_test_ns()
-                test_ns_dict = dataset.ns_sampler.eval_set["test"]
-                _tns, _found = [], []
-                for src, dst, time in zip(src_node_ids[test_mask], dst_node_ids[test_mask], node_interact_times[test_mask]):
-                    if (src, dst, time) in test_ns_dict:
-                        _tns.append(test_ns_dict[(src, dst, time)]); _found.append(True)
-                    else:
-                        _found.append(False)
-                # +1: negatives are raw TGB ids, the graph below is shifted by one for the padding node
-                test_ns = np.asarray(_tns, dtype=np.int64) + 1
-                test_ns_found = np.asarray(_found)
-                np.save(_off_ns_path, test_ns); np.save(_off_mask_path, test_ns_found)
-            print('TGB_OFFICIAL_REVIEW: %d of %d test edges have official negatives' % (int(test_ns_found.sum()), int(test_mask.sum())))
-        elif os.path.exists(test_ns_path):
+        if os.path.exists(test_ns_path):
             test_ns = np.load(test_ns_path)
         else:
             num_negs = 0
@@ -251,13 +218,7 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float = 0.15, test_ra
             node_raw_features = np.vstack([np.zeros(node_raw_features.shape[1])[np.newaxis, :], node_raw_features])
             assert MAX_FEAT_DIM >= node_raw_features.shape[1], f'Node feature dimension in dataset {dataset_name} is bigger than {MAX_FEAT_DIM}!'
         if not use_edge_feat:
-            _off_edge_dim = os.environ.get('TGB_OFFICIAL_EDGE_DIM')
-            if _off_edge_dim:
-                # match the csv-branch behaviour for >10M-edge graphs (unpadded width) so that
-                # checkpoints trained there load into the TGB-branch evaluation
-                edge_raw_features = np.zeros((len(src_node_ids) + 1, int(_off_edge_dim)))
-            else:
-                edge_raw_features = np.zeros((len(src_node_ids) + 1, MAX_FEAT_DIM))
+            edge_raw_features = np.zeros((len(src_node_ids) + 1, MAX_FEAT_DIM))
         else:
             edge_raw_features = data['edge_feat'].astype(np.float64)
             # deal with edge features whose shape has only one dimension
@@ -277,10 +238,7 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float = 0.15, test_ra
         val_split = np.full(val_mask.sum(),1)
         val_data = Data(src_node_ids=src_node_ids[val_mask], dst_node_ids=dst_node_ids[val_mask],
                         node_interact_times=node_interact_times[val_mask], edge_ids=edge_ids[val_mask], labels=labels[val_mask], split=val_split)
-        if test_ns_found is not None:
-            test_split = np.where(test_ns_found, 2, 0)
-        else:
-            test_split = np.full(test_mask.sum(),2)
+        test_split = np.full(test_mask.sum(),2)
         test_data = Data(src_node_ids=src_node_ids[test_mask], dst_node_ids=dst_node_ids[test_mask],
                         node_interact_times=node_interact_times[test_mask], edge_ids=edge_ids[test_mask], labels=labels[test_mask], neg_samples=test_ns, split=test_split)
         # the val_test_data will not be used
@@ -349,5 +307,4 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float = 0.15, test_ra
         test_data.num_interactions, test_data.num_unique_nodes))
     
     return node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, None, None, val_test_data
-
 

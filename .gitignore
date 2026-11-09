@@ -3,7 +3,8 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 .venv/
-data/
+data/*
+!data/uci/
 logs/
 saved_models/
 saved_results/

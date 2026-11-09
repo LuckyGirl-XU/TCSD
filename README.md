@@ -1,64 +1,307 @@
-# TCSD
+<p align="center">
+  <img src="assets/overview.png" alt="TCSD: evolving structural states guide aggregation" width="460">
+</p>
 
-Implementation of TCSD for temporal link prediction.
+<h1 align="center">A New Perspective on Target-Conditioned Structural Dynamics<br>for Link Prediction in Dynamic Graphs</h1>
 
-## Requirements
+<p align="center">
+  Yuanyuan Xu, Yin Chen, Yingxuan Li, Wenjie Zhang, Xuemin Lin, Ying Zhang
+</p>
 
-- Python 3.9
-- PyTorch 2.0.0
-- PyTorch Geometric 2.4.0
+<p align="center">
+  <img src="https://img.shields.io/badge/NeurIPS-2026-4b44ce" alt="NeurIPS 2026">
+  <img src="https://img.shields.io/badge/PyTorch-2.0-ee4c2c" alt="PyTorch 2.0">
+  <img src="https://img.shields.io/badge/Python-3.9-3776ab" alt="Python 3.9">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
+</p>
 
-Install the dependencies:
+<p align="center">
+  <a href="#overview">Overview</a> ·
+  <a href="#results">Results</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#training-and-evaluation">Training</a> ·
+  <a href="#using-your-own-dataset">Your own dataset</a> ·
+  <a href="#citation">Citation</a>
+</p>
+
+This repository is the official implementation of **TCSD**. It is built on the [CRAFT](https://github.com/luyi256/CRAFT) codebase, so the baselines stay available next to TCSD and all methods share the same data splits, negative sampling and metrics.
+
+## Overview
+
+Whether a link will form depends on the candidate target: the same source history can be strong evidence for one target and irrelevant for another. Existing target-conditioned methods capture this with repeated interactions or co-neighbor overlap, but they usually encode these signals as identity-based features and inject them passively before aggregation. These encodings collapse when exact matches are sparse, and the signals get diluted among high-dimensional time and edge features.
+
+TCSD treats structural signals as **states that evolve over the recent history**, and lets their dynamics control the aggregation.
+
+<p align="center">
+  <img src="assets/framework.png" alt="The TCSD framework" width="900">
+</p>
+
+| Step | What it does | Paper | Code |
+|---|---|---|---|
+| **1. Hybrid structural states** | Exact indicators keep time-aware repeat and co-neighbor matches, relaxed indicators recover latent support through embedding similarity | Eq. 1-4 | `exact_repeat`, `exact_co_neighbor`, `relaxed_repeat`, `relaxed_co_neighbor` |
+| **2. Structural dynamics** | Depthwise and pointwise convolutions capture temporal consistency within an indicator and complementarity across indicators | Eq. 6 | `StructuralDynamicsEncoder` |
+| **3. Dynamics-guided aggregation** | A dimension-wise gate and attentive pooling amplify target-relevant neighbors and suppress irrelevant ones | Eq. 7-8 | `StructuralDynamicsEncoder.gate_mlp`, `TCSD.attentive_pool` |
+
+[`models/TCSD.py`](models/TCSD.py) holds the core of the method, and the general layers it uses are in [`models/modules.py`](models/modules.py). Like the other models of this codebase, `TCSD` computes the source and destination embeddings and a merge layer, here `ProductMergeLayer`, scores them. As the source embedding depends on the candidate, `compute_src_dst_node_temporal_embeddings` takes all the candidates of a query at once.
+
+## Results
+
+- **Best on 13 of 16 datasets** against ten baselines
+- **Up to +14.27%** relative MRR improvement, on YouTube
+- **4.43× faster per epoch** than DyGFormer on mooc, and 3.76× on lastfm
+
+Test MRR (%), mean ± std over 3 runs, reported in the paper. **Bold** marks the best result of the row.
+
+| Dataset | Setting | TCSD | Best baseline | Relative gain |
+|---|---|---|---|---|
+| ML-20M | Unseen-dominant | 35.10 ± 0.58 | **35.91 ± 0.65** (CRAFT) | -2.26% |
+| Taobao | Unseen-dominant | **73.34 ± 0.46** | 70.68 ± 0.42 (CRAFT) | +3.76% |
+| GoogleLocal | Unseen-dominant | **66.24 ± 0.55** | 62.35 ± 0.46 (CRAFT) | +6.24% |
+| Flickr | Unseen-dominant | **69.99 ± 0.00** | 62.34 ± 0.84 (CRAFT) | +12.27% |
+| YouTube | Unseen-dominant | **67.33 ± 0.35** | 58.92 ± 0.16 (CRAFT) | +14.27% |
+| WikiLink | Unseen-dominant | **79.23 ± 0.14** | 75.48 ± 0.84 (CRAFT) | +4.97% |
+| tgbl-review | Unseen-dominant | **46.09 ± 0.39** | 44.64 ± 0.19 (TAMI-GM) | +3.25% |
+| tgbl-comment | Unseen-dominant | **92.73 ± 0.09** | 91.72 ± 0.59 (CRAFT) | +1.10% |
+| wikipedia | Seen-dominant | **89.51 ± 0.02** | 88.69 ± 0.04 (DyGFormer) | +0.92% |
+| reddit | Seen-dominant | **89.42 ± 0.14** | 89.33 ± 0.11 (CRAFT) | +0.10% |
+| mooc | Seen-dominant | **69.78 ± 0.38** | 62.32 ± 0.39 (CRAFT) | +11.97% |
+| lastfm | Seen-dominant | **55.88 ± 0.45** | 55.21 ± 0.23 (CRAFT) | +1.21% |
+| uci | Seen-dominant | **79.50 ± 0.19** | 76.61 ± 0.26 (DyGFormer) | +3.77% |
+| Flights | Seen-dominant | 83.14 ± 0.51 | **85.30 ± 0.51** (TAMI-DyG) | -2.53% |
+| tgbl-coin | Seen-dominant | **91.12 ± 0.22** | 88.47 ± 0.25 (CRAFT) | +3.00% |
+| tgbl-flights | Seen-dominant | 87.58 ± 0.37 | **91.39 ± 0.03** (CRAFT) | -4.17% |
+
+Evaluation follows the ranking-based setting: each positive query is ranked against 100 sampled negative destinations. `tgbl-coin` and `tgbl-comment` use the 20 negatives stored in their test files.
+
+## Getting started
+
+### Installation
+
+Python 3.9 and PyTorch 2.0.0 were used. Install a CUDA build of PyTorch first, then:
 
 ```bash
+git clone https://github.com/LuckyGirl-XU/TCSD.git
+cd TCSD
 conda create -n tcsd python=3.9
 conda activate tcsd
 pip install -r requirements.txt
 ```
 
-## Datasets
+### Data preparation
 
-The following datasets are supported:
+`uci` is included in [`data/uci/`](data/uci), so the quick start runs without any download. Place the other datasets under `./data/`, or pass another folder with `--dataset_path`. Each dataset is split chronologically into 70% training, 15% validation and 15% test.
 
-- **CSV datasets:** `uci`, `mooc`, `lastfm`, `wikipedia`, `Flights`, `tgbl-review`, `tgbl-flight`.
-- **TGB-Seq datasets:** `GoogleLocal`, `YouTube`, `Flickr`, `Taobao`, `WikiLink`.
-- **TGB datasets:** `tgbl-coin`, `tgbl-comment`.
+| Datasets | Where to get them | Files read by the code |
+|---|---|---|
+| `wikipedia`, `reddit`, `mooc`, `lastfm`, `uci`, `Flights` | Download the original files from [Zenodo](https://zenodo.org/record/7213796) and process them with `preprocess_data/preprocess_data.py` of [DyGLib](https://github.com/yule-BUAA/DyGLib) | `data/<name>/ml_<name>.csv`, `ml_<name>.npy`, `ml_<name>_node.npy` |
+| `GoogleLocal`, `YouTube`, `Flickr`, `Taobao`, `WikiLink`, `ML-20M` | Downloaded automatically from [TGB-Seq](https://huggingface.co/TGB-Seq) on the first run | `data/<name>/<name>.csv`, `<name>_test_ns.npy` |
+| `tgbl-coin`, `tgbl-comment` | Downloaded by the bundled [TGB](https://github.com/shenyangHuang/TGB) loader on the first run, which asks for confirmation | `data/tgbl_coin/`, `data/tgbl_comment/` |
+| `tgbl-review`, `tgbl-flight` | Download the original files from [TGB](https://tgb.complexdatalab.com/) and store them in the same CSV format as the datasets of the first row | `data/<name>/ml_<name>.csv`, `ml_<name>.npy`, `ml_<name>_node.npy`, with the prefix `tgbl_flight` for `tgbl-flight` |
 
-Place the prepared datasets under `./data/`. Data files are not included in this repository.
+The test negatives of the TGB-Seq and TGB datasets come with the datasets. For the other datasets, they are sampled with a fixed seed, so every run evaluates on the same negatives.
 
-- CSV datasets require `data/<name>/ml_<name>.csv`, `ml_<name>.npy` and `ml_<name>_node.npy`.
-- TGB-Seq datasets use `data/<name>/<name>.csv` and `<name>_test_ns.npy`.
-- TGB datasets use the bundled loader with folders `data/tgbl_coin/` and `data/tgbl_comment/`.
-
-For `tgbl-flight`, the folder and file prefix are `tgbl_flight`. Keep the same processed data, splits and negative samples for reproduction. Use `--dataset_path /path/to/data` to specify another data directory.
-
-## Run Examples
-
-Run the commands from the repository root. Dataset-specific hyperparameters are loaded automatically from `configs/datasets.json`.
-
-### Training and evaluation
+### Quick start
 
 ```bash
-python train_link_prediction.py --dataset_name GoogleLocal --gpu 0 --seed 0
-python train_link_prediction.py --dataset_name lastfm --gpu 0 --seed 0
+python train_link_prediction.py --dataset_name uci --load_best_configs --gpu 0 --seed 0
 ```
 
-Replace `--dataset_name` with any dataset listed above. Each run trains the model, selects the best validation checkpoint and evaluates it on the test set.
+This trains TCSD on uci, selects the best checkpoint by validation MRR and evaluates it on the test set. It takes about 12 minutes on a Tesla V100.
+
+## Training and evaluation
+
+### Best configurations
+
+`--load_best_configs` loads the configuration of a dataset from [`configs/datasets.json`](configs/datasets.json). Options given on the command line take precedence, so you can change one setting and keep the others:
+
+```bash
+python train_link_prediction.py --dataset_name uci --load_best_configs --num_neighbors 20 --hidden_dropout 0.5 --gpu 0
+```
+
+Without this flag, only the defaults of [`utils/load_configs.py`](utils/load_configs.py) and your own options apply, so pass it to reproduce the paper. To print the resolved settings without loading any data:
+
+```bash
+python train_link_prediction.py --dataset_name uci --load_best_configs --print_config
+```
+
+All presets use a batch size of 256, a learning rate of 3e-4, a hidden dimension of 172, 2 encoder layers and BCE. The settings that differ per dataset are:
+
+| Dataset | Neighbors | Hidden dropout | Predictor layers | Epochs | LR scheduler | Edge features |
+|---|---:|---:|---:|---:|:---:|:---:|
+| uci | 30 | 0.1 | 2 | 50 |  |  |
+| mooc | 20 | 0.1 | 1 | 30 | ✓ |  |
+| lastfm | 80 | 0.1 | 1 | 30 | ✓ |  |
+| wikipedia | 30 | 0.1 | 2 | 50 |  |  |
+| Flights | 50 | 0.5 | 2 | 20 | ✓ |  |
+| GoogleLocal | 20 | 0.5 | 2 | 30 | ✓ |  |
+| Taobao | 30 | 0.1 | 2 | 15 |  |  |
+| Flickr | 30 | 0.5 | 2 | 20 | ✓ |  |
+| YouTube | 20 | 0.5 | 2 | 100 | ✓ |  |
+| WikiLink | 30 | 0.5 | 2 | 15 | ✓ |  |
+| tgbl-review | 20 | 0.5 | 2 | 35 | ✓ | ✓ |
+| tgbl-coin | 30 | 0.1 | 2 | 15 |  |  |
+| tgbl-comment | 30 | 0.5 | 2 | 15 | ✓ |  |
+| tgbl-flight | 20 | 0.5 | 2 | 100 | ✓ |  |
+
+`reddit` and `ML-20M` have no preset and use the [default configuration](#using-your-own-dataset).
 
 ### Multiple seeds
 
 ```bash
 for seed in 0 1 2; do
-  python train_link_prediction.py --dataset_name GoogleLocal --gpu 0 --seed "$seed" --num_runs 1
+  python train_link_prediction.py --dataset_name uci --load_best_configs --gpu 0 --seed "$seed"
 done
 ```
 
-### Test a saved checkpoint
+### Evaluating a saved checkpoint
 
-Use the same dataset, seed and model settings as the training run:
+Use the settings of the training run:
 
 ```bash
-python train_link_prediction.py --dataset_name GoogleLocal --gpu 0 --seed 0 --load_pretrained --num_epochs 0
+python train_link_prediction.py --dataset_name uci --load_best_configs --gpu 0 --seed 0 --load_pretrained --num_epochs 0
 ```
 
-Checkpoints and results are saved in `saved_models/` and `saved_results/`. Testing again with the same settings replaces the corresponding result JSON.
+### Reproducing the paper
+
+Run every dataset with its best configuration over seeds 0, 1 and 2:
+
+```bash
+for dataset in uci mooc lastfm wikipedia Flights GoogleLocal Taobao Flickr YouTube WikiLink tgbl-review tgbl-coin tgbl-comment tgbl-flight; do
+  for seed in 0 1 2; do
+    python train_link_prediction.py --dataset_name "$dataset" --load_best_configs --gpu 0 --seed "$seed"
+  done
+done
+```
+
+The test MRR of each run is in `saved_results/<dataset>/TCSD/`, and the log ends with the mean and standard deviation over the runs of one command.
+
+### Outputs
+
+| Folder | Content |
+|---|---|
+| `saved_models/` | Best checkpoint of each run |
+| `saved_results/` | Test metrics as JSON: MRR, average precision and ROC AUC |
+| `logs/` | Full training log |
+
+Evaluating again with the same settings replaces the corresponding result file.
+
+### Main arguments
+
+| Argument | Meaning |
+|---|---|
+| `--num_neighbors` | Length of the source history |
+| `--embedding_size` | Hidden dimension |
+| `--num_layers` | Number of encoder layers |
+| `--hidden_dropout` | Dropout rate of the hidden layers |
+| `--emb_dropout_prob` | Dropout rate of the destination representation |
+| `--num_output_layer` | Number of layers of the predictor |
+| `--use_lr_scheduler` | Linear warmup followed by cosine annealing |
+| `--use_mrr_val` | Select the checkpoint by validation MRR instead of AP |
+| `--collision_check` | Reject negatives that are true interactions, always on for `wikipedia`, `reddit`, `mooc`, `lastfm`, `uci` and `Flights` |
+| `--use_edge_feat` | Use edge features |
+
+TCSD is always trained with BCE, `--loss` only applies to the baselines.
+
+## Using your own dataset
+
+A new dataset in the CSV format works without code changes. Add these files to `data/<name>/`:
+
+| File | Content |
+|---|---|
+| `ml_<name>.csv` | One row per interaction, with the columns `u`, `i`, `ts`, `label` and `idx`. Node ids and `idx` start from 1, as 0 is reserved for padding |
+| `ml_<name>.npy` | Edge features, one row per interaction plus an all-zero first row |
+| `ml_<name>_node.npy` | Node features, one row per node plus an all-zero first row |
+
+Then run it with the `default` configuration, which follows the settings of the paper, and tune from there:
+
+```bash
+python train_link_prediction.py --dataset_name <name> --load_best_configs --gpu 0
+python train_link_prediction.py --dataset_name <name> --load_best_configs --hidden_dropout 0.5 --num_neighbors 30 --gpu 0
+```
+
+A hidden dropout of 0.1 suits most datasets, sparser ones use 0.5. For a bipartite graph, also pass `--is_bipartite True`.
+
+## Baselines
+
+All the baselines of the paper run in the same framework, with the same data, splits, negatives and evaluation, through `--model_name`:
+
+| Baseline | `--model_name` | Paper |
+|---|---|---|
+| JODIE, DyRep, TGN | `JODIE`, `DyRep`, `TGN` | Kumar et al. 2019, Trivedi et al. 2019, Rossi et al. 2020 |
+| TGAT | `TGAT` | Xu et al. 2020 |
+| CAWN | `CAWN` | Wang et al. 2021 |
+| GraphMixer | `GraphMixer` | Cong et al. 2023 |
+| DyGFormer | `DyGFormer` | Yu et al. 2023 |
+| CRAFT | `CRAFT` | Yi et al. 2025 |
+| TAMI-GM, TAMI-DyG | `TAMI` with `--tami_backbone GraphMixer` or `DyGFormer` | Yu et al. 2025 |
+
+`--load_best_configs` loads the configurations of DyGLib for the baselines, and TAMI uses the configuration of its backbone:
+
+```bash
+python train_link_prediction.py --dataset_name mooc --model_name GraphMixer --load_best_configs --use_mrr_val --gpu 0
+python train_link_prediction.py --dataset_name mooc --model_name TAMI --tami_backbone GraphMixer --load_best_configs --use_mrr_val --gpu 0
+python train_link_prediction.py --dataset_name mooc --model_name TAMI --tami_backbone DyGFormer --load_best_configs --use_mrr_val --gpu 0
+```
+
+CRAFT has no entry there, and follows the command of its authors:
+
+```bash
+python train_link_prediction.py --dataset_name mooc --model_name CRAFT --batch_size 200 --gpu 0 --num_neighbors 30 --embedding_size 64 --loss BPR --hidden_dropout 0.1 --attn_dropout_prob 0.1 --emb_dropout_prob 0.1 --shuffle --output_cat_time_intervals --num_output_layer 2 --num_layers 2 --output_cat_repeat_times --use_pos
+```
+
+In the paper, the results marked with ∗ are taken from CRAFT, and the others were run in this framework.
+
+## Repository structure
+
+```text
+TCSD/
+├── train_link_prediction.py   # training and evaluation entry point
+├── evaluate_models_utils.py   # MRR and AP evaluation
+├── configs/datasets.json      # best configurations of TCSD
+├── data/uci/                  # the uci dataset, ready to use
+├── models/
+│   ├── TCSD.py                # our model
+│   ├── modules.py             # shared layers
+│   ├── TAMI.py                # TAMI baseline
+│   └── ...                    # other baselines
+├── utils/                     # data loading, sampling, metrics, early stopping, arguments
+├── tgb/, tgb_seq/             # bundled TGB and TGB-Seq loaders
+└── tests/                     # CPU tests, no data needed
+```
+
+## Tests
+
+The tests run on the CPU and need no data:
+
+```bash
+python tests/test_release.py
+python tests/test_temporal_causality.py
+```
+
+`test_temporal_causality.py` checks that a query cannot see later interactions of its batch, and that padding and empty histories are handled correctly.
+
+## Notes on reproducibility
+
+- Results can differ slightly between GPUs and environments, even with the same seed.
+- On the CPU, the oneDNN backend is disabled for TCSD, as it returned invalid gradients for the grouped convolution with PyTorch 2.0.
+
+## Citation
+
+If you find this work useful, please cite:
+
+```bibtex
+@inproceedings{xu2026tcsd,
+  title     = {A New Perspective on Target-Conditioned Structural Dynamics for Link Prediction in Dynamic Graphs},
+  author    = {Xu, Yuanyuan and Chen, Yin and Li, Yingxuan and Zhang, Wenjie and Lin, Xuemin and Zhang, Ying},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2026}
+}
+```
+
+## Acknowledgements
+
+This code is built upon [CRAFT](https://github.com/luyi256/CRAFT), [DyGLib](https://github.com/yule-BUAA/DyGLib), [TGB](https://github.com/shenyangHuang/TGB) and [TGB-Seq](https://github.com/TGB-Seq/TGB-Seq). We thank their authors for sharing their work.
+
+## License
+
+This project is released under the [MIT License](LICENSE).

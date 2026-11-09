@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import logging
 
-
 class EarlyStopping(object):
 
     def __init__(self, patience: int, save_model_folder: str, save_model_name: str, logger: logging.Logger, model_name: str = None):
