@@ -11,6 +11,7 @@
 <p align="center">
   <a href="https://neurips.cc/virtual/2026/loc/sydney/poster/151703"><img src="https://img.shields.io/badge/NeurIPS-2026-4b44ce" alt="NeurIPS 2026"></a>
   <a href="https://openreview.net/forum?id=YfsyoH7YFs"><img src="https://img.shields.io/badge/OpenReview-Paper-8c1b13" alt="OpenReview"></a>
+  <a href="TCSD_Slides.pdf"><img src="https://img.shields.io/badge/Slides-PDF-2d62c4" alt="Slides"></a>
   <!-- <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b" alt="arXiv"></a> -->
   <img src="https://img.shields.io/badge/PyTorch-2.0-ee4c2c" alt="PyTorch 2.0">
   <img src="https://img.shields.io/badge/Python-3.9-3776ab" alt="Python 3.9">
