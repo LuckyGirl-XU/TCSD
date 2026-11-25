@@ -50,7 +50,6 @@ TCSD treats structural signals as **states that evolve over the recent history**
 - **Best on 13 of 16 datasets** against ten baselines
 - **Up to +14.27%** relative MRR improvement, on YouTube
 - **4.43× faster per epoch** than DyGFormer on mooc, and 3.76× on lastfm
-- 
 
 ## Getting started
 
